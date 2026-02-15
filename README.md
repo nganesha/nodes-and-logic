@@ -1,5 +1,9 @@
 # Nodes & Logic
 
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://nodes-and-logic-f95zsj3qureecfytq3ulcw.streamlit.app/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Interactive Python **Code-to-Architecture Visualizer** built with Streamlit. Paste Python code, generate a live node-link architecture map, and get LLM-powered architectural insights.
 
 ## Overview
