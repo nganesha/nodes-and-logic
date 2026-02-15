@@ -1,0 +1,9 @@
+[theme]
+primaryColor = "#00FFA3" # Cyber Green
+backgroundColor = "#0D1117" # Deep Space Blue/Black
+secondaryBackgroundColor = "#161B22"
+textColor = "#E6EDF3"
+font = "sans serif"
+
+[server]
+headless = true
