@@ -1,5 +1,6 @@
 import ast
 import litellm
+from radon.complexity import cc_visit
 
 
 class CodeAnalyzer:
@@ -17,51 +18,113 @@ class CodeAnalyzer:
         self.provider = provider
         self.ollama_base_url = ollama_base_url
 
+    @staticmethod
+    def _health_color(score):
+        if score is None:
+            return "#9CA3AF"
+        if score <= 5:
+            return "#00FFA3"
+        if score <= 10:
+            return "#FFD700"
+        return "#FF4B4B"
+
+    @staticmethod
+    def _call_name(call_node):
+        func = call_node.func
+        if isinstance(func, ast.Name):
+            return func.id
+        if isinstance(func, ast.Attribute):
+            parts = []
+            current = func
+            while isinstance(current, ast.Attribute):
+                parts.append(current.attr)
+                current = current.value
+            if isinstance(current, ast.Name):
+                parts.append(current.id)
+            return ".".join(reversed(parts))
+        return None
+
+    def _complexity_by_symbol(self):
+        metrics = {}
+        try:
+            blocks = cc_visit(self.code)
+        except Exception:
+            return metrics
+
+        for block in blocks:
+            name = getattr(block, "name", None)
+            if not name:
+                continue
+
+            complexity = getattr(block, "complexity", None)
+            classname = getattr(block, "classname", None)
+            if classname:
+                metrics[f"{classname}.{name}"] = complexity
+            else:
+                metrics[name] = complexity
+
+        return metrics
+
     def get_structure(self, show_internal):
         tree = ast.parse(self.code)
+        complexity_map = self._complexity_by_symbol()
         nodes = []
         edges = []
+        known_nodes = set()
 
-        for node in ast.walk(tree):
-            # 1. Handle Classes
+        for node in tree.body:
             if isinstance(node, ast.ClassDef):
-                nodes.append({
-                    "id": node.name,
-                    "label": f"Class: {node.name}",
-                    "color": "#1C83E1",
-                })
-
-                # Look for methods inside the class
-                for item in node.body:
-                    if isinstance(item, ast.FunctionDef):
-                        # Create a UNIQUE ID by combining Class + Method
-                        method_id = f"{node.name}.{item.name}"
-                        nodes.append({
-                            "id": method_id,
-                            "label": f"fn: {item.name}",
-                            "color": "#FF4B4B",
-                        })
-                        # Link Method to its Class
-                        edges.append({"source": node.name, "target": method_id})
-
-                        # Optional: Look for calls inside methods
-                        for child in ast.walk(item):
-                            if isinstance(child, ast.Call) and isinstance(child.func, ast.Name):
-                                # Link to the called function
-                                edges.append({"source": method_id, "target": child.func.id})
-
-            # 2. Handle Global Functions (functions not inside a class)
-            if isinstance(node, ast.FunctionDef):
-                # Check if this function was already handled as a class method
-                # If not, it's a global function
-                is_global = not any(node.name in n["id"] for n in nodes if "." in n["id"])
-
-                if is_global:
+                if node.name not in known_nodes:
                     nodes.append({
                         "id": node.name,
-                        "label": f"fn: {node.name}",
-                        "color": "#FF4B4B",
+                        "label": f"Class: {node.name}",
+                        "color": "#1C83E1",
+                        "cc_score": None,
+                        "title": f"Class: {node.name}",
                     })
+                    known_nodes.add(node.name)
+
+                for item in node.body:
+                    if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        continue
+
+                    method_id = f"{node.name}.{item.name}"
+                    cc_score = complexity_map.get(method_id)
+                    cc_color = self._health_color(cc_score)
+                    cc_display = cc_score if cc_score is not None else "N/A"
+                    nodes.append({
+                        "id": method_id,
+                        "label": f"fn: {item.name}",
+                        "color": cc_color,
+                        "cc_score": cc_score,
+                        "title": f"fn: {item.name}\nCyclomatic Complexity: {cc_display}",
+                    })
+                    known_nodes.add(method_id)
+                    edges.append({"source": node.name, "target": method_id})
+
+                    for child in ast.walk(item):
+                        if isinstance(child, ast.Call):
+                            call_name = self._call_name(child)
+                            if call_name:
+                                edges.append({"source": method_id, "target": call_name})
+
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                cc_score = complexity_map.get(node.name)
+                cc_color = self._health_color(cc_score)
+                cc_display = cc_score if cc_score is not None else "N/A"
+                nodes.append({
+                    "id": node.name,
+                    "label": f"fn: {node.name}",
+                    "color": cc_color,
+                    "cc_score": cc_score,
+                    "title": f"fn: {node.name}\nCyclomatic Complexity: {cc_display}",
+                })
+                known_nodes.add(node.name)
+                for child in ast.walk(node):
+                    if isinstance(child, ast.Call):
+                        call_name = self._call_name(child)
+                        if call_name:
+                            edges.append({"source": node.name, "target": call_name})
 
         return nodes, edges
 

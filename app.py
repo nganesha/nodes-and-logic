@@ -228,6 +228,11 @@ with st.sidebar:
     st.divider()
     accent_color = st.color_picker("Graph Accent", "#3AA3FF")
     show_internal = st.checkbox("Show built-in calls", value=False)
+    st.markdown("### Complexity Legend")
+    st.markdown("- `Green (#00FFA3)`: CC 1-5")
+    st.markdown("- `Yellow (#FFD700)`: CC 6-10")
+    st.markdown("- `Red (#FF4B4B)`: CC 11+")
+    st.markdown("- `Neutral (#9CA3AF)`: CC unavailable")
 
 # --- Top Dashboard / Insights ---
 if st.session_state.analysis_error:
@@ -302,6 +307,7 @@ with right_col:
                 label=n["label"],
                 size=24,
                 color=n["color"] if n["color"] != "#1C83E1" else accent_color,
+                title=n.get("title", n["label"]),
             )
             for n in st.session_state.nodes_data
         ]
